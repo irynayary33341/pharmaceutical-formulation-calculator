@@ -12,13 +12,19 @@ mode = st.radio(
 )
 if mode == "Liquid Dosage Forms":
     ml_per_unit = st.number_input("Enter the fill volume per unit (ml):", min_value=0.1, value=1.0, step=0.01, key="ml_per_unit")
+    
     number_of_units = st.number_input("Enter the number of units:", min_value= 1.0, value=100.0, step= 1.0, key="number_of_units")
-    total_volume_weight = (ml_per_unit * number_of_units)/1000
-    st.write("Total solution volume:", total_volume_weight, "L")
+    
+    total_volume_weight = (ml_per_unit * number_of_units)
+    st.write("Total solution volume:", total_volume_weight, "ml")
 
     total_ml_sol = st.number_input("Enter the API concentration (mg/mL):", min_value=0.1, value=0.5, step=0.1, key="total_weight_sol")
+
+    weight_api_un = total_ml_sol * ml_per_unit
+    st.write("Total API mass per unit (mg):", weight_api_un, "mg")
+    
     batch_weight_API = (total_ml_sol * ml_per_unit * number_of_units)/1000
-    st.write("Total API mass per unit:", batch_weight_API, "g")
+    st.write("Total API mass per batch:", batch_weight_API, "g")
 
 
 elif mode == "Solid Dosage Forms":
@@ -29,7 +35,7 @@ elif mode == "Solid Dosage Forms":
 elif mode == "Batch Size Calculator":
     mode_calc = st.radio(
     "Calculation",
-    ["mg", "% w/w", "mg/ml"])
+    ["mg", "% w/w", "mg/ml", "Binder Solution Preparation (% w/w)"])
     if mode_calc == "% w/w":
         total_weight = st.number_input("Enter the unit weight (mg):", min_value=1, value=100, step=1, key="total_weight_percent")
         total_batch_kg = st.number_input("Enter the desired batch weight (kg):", min_value=0.01, value=1.0, step=0.1, key="total_batch_kg")
@@ -282,37 +288,55 @@ elif mode == "Batch Size Calculator":
 
         edited_formulation["mg/unit"] = (edited_formulation["mg/ml"] * total_volume)
 
-    export_formulation = edited_formulation.copy()
-    if mode_calc == "mg/ml":
-        export_formulation = export_formulation.dropna(
-        subset=["mg/ml"],
-        how="all")
-        valid_total = not export_formulation.empty
-    else:
-        export_formulation = export_formulation.dropna( subset=["mg", "%", "Batch weight"], how="all")
-        valid_total = (
+    if mode_calc in ["mg", "% w/w", "mg/ml"]:
+        export_formulation = edited_formulation.copy()
+        
+        if mode_calc == "mg/ml":
+            export_formulation = export_formulation.dropna( subset=["mg/ml"], how="all")
+            valid_total = not export_formulation.empty
+        else:
+            export_formulation = export_formulation.dropna( subset=["mg", "%", "Batch weight"], how="all")
+            
+            valid_total = (
             not export_formulation.empty
             and abs(export_formulation["%"].sum() - 100) <= 0.01)
+            
+            cvs_data = export_formulation.to_csv(index=False)
+        
+            st.download_button( label="Download Formulation (CSV)", data=cvs_data, file_name="formulation.csv", mime="text/csv", disabled = not valid_total)
+        
+            with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+                export_formulation.to_excel(writer, sheet_name="Formulation", index=False)
+        
+            st.download_button( label="Download Formulation (excel)",
+            data=excel_buffer.getvalue(),
+            file_name="formulation.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            disabled = not valid_total)
+
+
+    if mode_calc == "Binder Solution Preparation (% w/w)":
+        concentration = st.number_input("Enter the desired concantration (%) of solution:", min_value=0.001, max_value=100.000, value=None, key="concentration_input", disabled = st.session_state.get("solute_mass_input") is not None)
+        
+        mass_of_sol= st.number_input("Enter the desired solution mass (g):", min_value=1.0)
+        
+        solute_mass=st.number_input("Enter the substance mass (g):",min_value=0.01,  value=None, disabled=(concentration is not None), key="solute_mass_input")
+
+        if solute_mass is None and concentration is not None:
+            solute_mass= (concentration * mass_of_sol)/100
+            st.write(f"Required amount of substance (g): {solute_mass:.3f}")
+        elif concentration is None and solute_mass is not None:
+            if solute_mass > mass_of_sol:
+                st.error("incorect value")
+            else:
+                concentration = (solute_mass * 100)/mass_of_sol
+                st.write(f"Concentraion of solution (%): {concentration:.3f}")
+        
+        if solute_mass is not None and solute_mass < mass_of_sol:
+            solvent_mass = mass_of_sol - solute_mass
+            st.write(f"Required amount of solvent (g): {solvent_mass:.3f}")
     
-    cvs_data = export_formulation.to_csv(index=False)
-
-    st.download_button(
-    label="Download Formulation (CSV)",
-    data=cvs_data,
-    file_name="formulation.csv",
-    mime="text/csv",
-    disabled = not valid_total
-)
-    with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
-        export_formulation.to_excel(writer, sheet_name="Formulation", index=False)
-
-    st.download_button(
-        label="Download Formulation (excel)",
-        data=excel_buffer.getvalue(),
-        file_name="formulation.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        disabled = not valid_total)
-
+        
 elif mode == "API & Filler Correction":
     total_API_kg = st.number_input("Enter the initial API weight (kg):", min_value=0.01, value=1.0, step=0.1, key="total_API_kg")
     assay = st.number_input( "Assay (%):", min_value=00.01,max_value=115.0, value=90.0)
