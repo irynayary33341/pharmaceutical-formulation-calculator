@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 from io import BytesIO
 excel_buffer = BytesIO()
@@ -353,7 +354,7 @@ if mode_anal == 'Data Analysis':
         st.info("CSV must contain two header rows")
         uploaded_file = st.file_uploader("Upload experimental data", type = ["csv"])
 
-        analysis_mode = st.radio("Analysis mode", ["Single series", "Maltiple Series", "Relationship Analysis"])
+        analysis_mode = st.radio("Analysis mode", ["Single series", "Maltiple Series", "Relationship Analysis", "Correlation Matrix"])
         if uploaded_file is not None:
             df = pd.read_csv(uploaded_file, sep = ';',  decimal=",", header=[0, 1])
             st.dataframe(df)
@@ -736,6 +737,47 @@ if mode_anal == 'Data Analysis':
 
                             **N:** Number of paired observations.""")
 
+                        def create_correlation_scale(pearson_r, spearman_r):
+                            fig, ax = plt.subplots(figsize=(10, 2.5))
+
+                            ax.set_xlim(-1.1, 1.1)
+                            ax.set_ylim(-1, 1)
+
+                            ax.axvspan(-1.1, -0.7, color="lightcoral", alpha=0.3)
+                            ax.axvspan(-0.7, -0.3,color = "peachpuff", alpha=0.3)
+                            ax.axvspan(-0.3, 0.3, color = "lightyellow", alpha=0.3)
+                            ax.axvspan(0.3, 0.7, color = "lightgreen", alpha=0.3)
+                            ax.axvspan(0.7, 1.1, color="lightblue", alpha=0.3)
+
+                            ax.hlines(y=0, xmin=-1, xmax=1)
+
+                            ax.axvline(0, linestyle="--")
+
+                            ax.scatter(pearson_r, 0.3, s=120, label=f"Pearson r = {pearson_r:.3f}")
+                            ax.scatter(spearman_r, -0.3, s=120, label=f"Spearman ρ = {spearman_r:.3f}")
+
+                            ax.text(-0.85, 0.7, "Strong\nnegative", ha="center", fontsize=8)
+                            ax.text(-0.5, 0.7, "Moderate\nnegative", ha="center", fontsize=8)
+                            ax.text(0, 0.7, "Weak / near zero", ha="center", fontsize=8)
+                            ax.text(0.5, 0.7, "Moderate\npositive", ha="center", fontsize=8)
+                            ax.text(0.85, 0.7, "Strong\npositive", ha="center", fontsize=8)
+
+                            ax.set_xticks([-1, -0.5, 0, 0.5, 1])
+                            ax.set_yticks([])
+
+                            ax.spines["left"].set_visible(False)
+                            ax.spines["right"].set_visible(False)
+                            ax.spines["top"].set_visible(False)
+                            ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=2)
+                            ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=2)
+
+                            return fig
+
+
+                        fig_scale = create_correlation_scale(pearson_r, spearman_r)
+                        st.pyplot(fig_scale)  
+
+
                     if relationship_analysis_mode == "Scatter Plot":
                         ax.scatter(x, y)
 
@@ -764,7 +806,31 @@ if mode_anal == 'Data Analysis':
                         ax.grid(True,  alpha=0.3)
 
                     st.pyplot(fig)
-                                       
+
+            if analysis_mode == "Correlation Matrix":
+                select_param = df.select_dtypes(include="number")
+                selected_params = st.multiselect( "Select parameters for correlation", options=select_param.columns)
+                if len(selected_params) < 2:
+                    st.warning("Select at least two parameters")
+                else:
+                    correlation_data = df[selected_params]
+                    data_after_cor = correlation_data.corr(method="pearson")
+                    st.dataframe(data_after_cor)
+                    fig, ax = plt.subplots(figsize=(8, 6))
+                    
+                    sns.heatmap( data_after_cor, annot=True, fmt=".3f", cmap="coolwarm",vmin=-1, vmax=1, center=0, ax=ax)
+                    ax.set_xlabel("")
+                    ax.set_ylabel("")
+                    labels = data_after_cor.columns.get_level_values(1)
+                    ax.set_xticklabels(labels, rotation=45, ha="right")
+                    ax.set_yticklabels(labels, rotation=0)
+
+                    st.pyplot(fig)
+                    
+
+
+
+
 
 
 
